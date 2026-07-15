@@ -1,0 +1,26 @@
+# UI Framework
+streamlit>=1.32.0
+
+# AI, LLM, and Vector DB Frameworks
+langchain>=0.1.13
+langchain-google-genai>=1.0.1
+faiss-cpu>=1.8.0
+
+# Embeddings, Cross-Encoder, and NLI Guardrail
+sentence-transformers>=2.5.1
+transformers>=4.39.1
+torch>=2.2.1
+
+# Git and Data Extraction
+GitPython>=3.1.42
+PyGithub>=2.2.0
+
+# Utilities
+python-dotenv>=1.0.1
+pandas>=2.2.1
+tiktoken>=0.6.0
+
+# Evaluation Framework
+ragas>=0.1.4
+
+langchain-huggingface>=0.1.0
