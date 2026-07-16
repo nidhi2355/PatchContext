@@ -29,3 +29,6 @@ langchain-huggingface>=0.1.0
 #For NLI verification layer
 sentencepiece>=0.2.0
 protobuf>=4.25.3
+
+# GROQ 
+langchain-groq>=0.1.0

@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from src.retriever.search_engine import PatchContextRetriever
 
@@ -9,13 +9,12 @@ load_dotenv()
 
 class ResponseGenerator:
     def __init__(self):
-        # Initialize Gemini 3.5 Flash using LangChain's Google GenAI integration
-        print("Initializing Google Gemini 3.5 Flash...")
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-3.5-flash",
-            temperature=0.2, # Low temperature for factual, grounded responses
+        print("Initializing Groq GPT-OSS-120B...")
+        # Initialize Groq using LangChain
+        self.llm = ChatGroq(
+            model="openai/gpt-oss-120b", 
+            temperature=0.2, 
             max_tokens=1024,
-            timeout=None,
             max_retries=2
         )
         

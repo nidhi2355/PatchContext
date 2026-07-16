@@ -33,7 +33,7 @@ class HallucinationGuard:
         # Extract the highest probability prediction
         prediction_idx = torch.argmax(outputs.logits, dim=-1).item()
         
-        return self.label_map.get(prediction_idx, "UNKNOWN")
+        return self.label_map.get(prediction_idx, "UNKNOWN").upper()
 
 if __name__ == "__main__":
     guard = HallucinationGuard()

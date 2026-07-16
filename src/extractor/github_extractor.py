@@ -20,6 +20,38 @@ class RepositoryExtractor:
         # Extract "fastapi/fastapi" from the URL
         self.repo_name = repo_url.split("github.com/")[-1].replace(".git", "")
 
+    def extract_targeted_issues(self, queries: list[str]):
+        """Uses GitHub Search API to pinpoint specific historical discussions."""
+        print("Extracting targeted historical issues for benchmarking...")
+        items_data = []
+        seen_numbers = set()
+        
+        for query in queries:
+            print(f"Searching GitHub for: '{query}'...")
+            # Format the search specifically for the FastAPI repository
+            search_query = f"repo:{self.repo_name} {query}"
+            issues = self.gh.search_issues(search_query)
+            
+            count = 0
+            for item in issues:
+                if count >= 15:  # Grab the top 15 most relevant results per query
+                    break
+                if item.number not in seen_numbers:
+                    is_pr = item.pull_request is not None
+                    items_data.append({
+                        "number": item.number,
+                        "title": item.title,
+                        "body": item.body or "",
+                        "state": item.state,
+                        "created_at": item.created_at.isoformat(),
+                        "type": "pull_request" if is_pr else "issue",
+                        "html_url": item.html_url
+                    })
+                    seen_numbers.add(item.number)
+                count += 1
+                
+        return items_data
+
     def clone_or_pull_repo(self):
         """Clones the repository if it doesn't exist, otherwise pulls latest changes."""
         if not os.path.exists(self.clone_dir):
@@ -48,14 +80,13 @@ class RepositoryExtractor:
             
         return commits_data
 
-    def extract_issues_and_prs(self, max_items=200):
-        """Extracts recent issues and pull requests via GitHub REST API."""
+    def extract_issues_and_prs(self, max_items=1000): # Increased default cap to 1000 for better depth
         print(f"Extracting up to {max_items} issues and PRs...")
         gh_repo = self.gh.get_repo(self.repo_name)
         
         items_data = []
-        # PyGithub's get_issues() returns both Issues and PRs combined
-        issues = gh_repo.get_issues(state='all')
+        # Crucial Fix: sort='created', direction='asc' fetches foundational history first!
+        issues = gh_repo.get_issues(state='all', sort='created', direction='asc')
         
         count = 0
         for item in issues:
@@ -95,10 +126,15 @@ if __name__ == "__main__":
     # 1. Clone the codebase locally
     extractor.clone_or_pull_repo()
     
-    # 2. Extract and save commits
-    commits = extractor.extract_commits(max_commits=1000)
-    extractor.save_data(commits, "commits.json")
+    # Define our benchmark test topics
+    test_queries = [
+        "OAuth2PasswordRequestFormStrict",
+        "JSONResponse performance response_model",
+        "dependency injection rationale architecture"
+    ]
     
-    # 3. Extract and save Issues & PRs
-    issues_prs = extractor.extract_issues_and_prs(max_items=200)
-    extractor.save_data(issues_prs, "issues_prs.json")
+    # Extract specifically targeted historical data
+    targeted_data = extractor.extract_targeted_issues(test_queries)
+    
+    # Save this high-value data to our raw folder
+    extractor.save_data(targeted_data, "issues_prs.json")
