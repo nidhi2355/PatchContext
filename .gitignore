@@ -15,7 +15,6 @@ __pycache__/
 # Heavy project data files (We only push code, not the databases)
 data/raw/fastapi_repo/
 data/raw/*.json
-data/faiss_index/
 
 # IDE settings
 .vscode/
