@@ -4,26 +4,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PatchContext | AI History Assistant</title>
-    
+
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    
+
+    <!-- Fonts: Space Grotesk for display, IBM Plex Mono for UI chrome/labels -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500&display=swap" rel="stylesheet">
+
     <style>
-        /* Base Theme */
-        body { background-color: #0f1117; color: #e2e8f0; }
-        
-        /* Glassmorphism UI */
-        .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        /* ===== Design tokens =====
+           obsidian:    #120c1f   (soft obsidian — deep purple-black background)
+           panel:       #241a3a   (royal purple, glass base)
+           royal:       #5b3a9e   (primary — knowledge network / indexing color)
+           royal-deep:  #3d2570   (primary, darker — borders, pressed states)
+           amber:       #f5a623   (accent — highlights specific insight / retrieved chunk)
+           amber-deep:  #d98c1a   (accent, hover)
+           emerald:     #4fae86   (entailment / verified)
+           gold:        #f5a623   (caution — reuses accent, since amber = "alert" here)
+           coral:       #e2584c   (contradiction / danger)
+           cream:       #f3ede0   (primary text)
+           lavender-muted: #a99ac2 (secondary text)
+        */
+        body {
+            background-color: #120c1f;
+            color: #f3ede0;
+            font-family: 'IBM Plex Serif', Georgia, serif;
         }
-        
-        /* Loading Animation */
+
+        .font-display { font-family: 'Space Grotesk', sans-serif; }
+        .font-mono-ui { font-family: 'IBM Plex Mono', monospace; }
+
+        /* Ambient backdrop: royal purple glow with a hint of amber warmth beneath it */
+        .bg-ambient {
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(91, 58, 158, 0.25), transparent),
+                radial-gradient(ellipse 60% 40% at 50% 110%, rgba(245, 166, 35, 0.05), transparent),
+                #120c1f;
+        }
+
+        /* Glass panel — royal purple tint, amber-warmed hairline */
+        .glass-panel {
+            background: rgba(36, 26, 58, 0.72);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(91, 58, 158, 0.35);
+        }
+
+        /* Loading Animation — amber spin against purple ring */
         .loader {
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #3b82f6;
+            border: 3px solid rgba(91, 58, 158, 0.25);
+            border-top-color: #f5a623;
             border-radius: 50%;
             width: 24px;
             height: 24px;
@@ -31,84 +62,105 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Clean Markdown Styling */
-        #answerText h2, #answerText h3 { font-weight: bold; margin-top: 1rem; margin-bottom: 0.5rem; color: #f8fafc; }
+        /* Markdown Styling */
+        #answerText h2, #answerText h3 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; color: #f3ede0; }
         #answerText h2 { font-size: 1.25rem; }
         #answerText h3 { font-size: 1.1rem; }
         #answerText ul, #answerText ol { list-style-position: inside; margin-bottom: 1rem; padding-left: 0.5rem; text-align: left; }
         #answerText ul { list-style-type: disc; }
         #answerText ol { list-style-type: decimal; }
         #answerText li { margin-bottom: 0.25rem; }
-        #answerText strong { color: #f8fafc; font-weight: 600; }
-        #answerText blockquote { 
-            border-left: 4px solid #3b82f6; padding-left: 1rem; margin: 1rem 0; 
-            color: #94a3b8; font-style: italic; background: rgba(30, 41, 59, 0.3); 
-            padding-top: 0.5rem; padding-bottom: 0.5rem; border-radius: 0 4px 4px 0; 
+        #answerText strong { color: #f5a623; font-weight: 600; }
+        #answerText blockquote {
+            border-left: 4px solid #f5a623; padding-left: 1rem; margin: 1rem 0;
+            color: #a99ac2; font-style: italic; background: rgba(91, 58, 158, 0.12);
+            padding-top: 0.5rem; padding-bottom: 0.5rem; border-radius: 0 4px 4px 0;
         }
 
         /* Markdown Tables Styling */
-        #answerText table { 
-            width: 100%; margin: 1.5rem 0; border-collapse: collapse; text-align: left; 
-            background: rgba(30, 41, 59, 0.4); border-radius: 8px; overflow: hidden; 
+        #answerText table {
+            width: 100%; margin: 1.5rem 0; border-collapse: collapse; text-align: left;
+            background: rgba(91, 58, 158, 0.08); border-radius: 8px; overflow: hidden;
         }
-        #answerText th, #answerText td { padding: 0.75rem 1rem; border: 1px solid rgba(255, 255, 255, 0.1); }
-        #answerText th { background-color: rgba(59, 130, 246, 0.2); color: #f8fafc; font-weight: 600; }
+        #answerText th, #answerText td { padding: 0.75rem 1rem; border: 1px solid rgba(91, 58, 158, 0.25); }
+        #answerText th { background-color: rgba(245, 166, 35, 0.18); color: #f3ede0; font-weight: 600; font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; letter-spacing: 0.02em; }
         #answerText tr:nth-child(even) { background-color: rgba(255, 255, 255, 0.02); }
 
         /* Evidence Sidebar Styling */
         .evidence-card {
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid rgba(51, 65, 85, 0.5);
+            background: rgba(18, 12, 31, 0.6);
+            border: 1px solid rgba(169, 154, 194, 0.2);
             border-radius: 8px;
             padding: 1rem;
             transition: all 0.2s ease;
         }
         .evidence-card:hover {
-            border-color: rgba(59, 130, 246, 0.5);
-            background: rgba(15, 23, 42, 0.8);
+            border-color: rgba(245, 166, 35, 0.45);
+            background: rgba(18, 12, 31, 0.85);
         }
         .evidence-content {
             max-height: 180px;
             overflow-y: auto;
             font-size: 0.85rem;
-            color: #94a3b8;
+            color: #a99ac2;
         }
         /* Custom Scrollbar for Evidence */
         .evidence-content::-webkit-scrollbar { width: 4px; }
         .evidence-content::-webkit-scrollbar-track { background: transparent; }
-        .evidence-content::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-        .evidence-content h1, .evidence-content h2, .evidence-content h3 { color: #e2e8f0; font-size: 0.95rem; font-weight: 600; margin-bottom: 0.25rem; }
+        .evidence-content::-webkit-scrollbar-thumb { background: #5b3a9e; border-radius: 4px; }
+        .evidence-content h1, .evidence-content h2, .evidence-content h3 { color: #f3ede0; font-size: 0.95rem; font-weight: 600; margin-bottom: 0.25rem; }
         .evidence-content p { margin-bottom: 0.5rem; }
-        .evidence-content code { background: rgba(0,0,0,0.3); padding: 0.1rem 0.3rem; border-radius: 3px; font-family: monospace; color: #cbd5e1; }
+        .evidence-content code { background: rgba(0,0,0,0.35); padding: 0.1rem 0.3rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; color: #f5d9a8; }
 
         /* Evidence Markdown Styling */
-        .evidence-text a { color: #60a5fa; text-decoration: underline; }
-        .evidence-text strong { color: #f8fafc; }
-        .evidence-text code { background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+        .evidence-text a { color: #f5a623; text-decoration: underline; }
+        .evidence-text strong { color: #f3ede0; }
+        .evidence-text code { background: rgba(0,0,0,0.35); padding: 2px 4px; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; }
         .evidence-text p { margin-bottom: 0.5rem; }
-        
+
         /* Custom Scrollbar for Evidence Cards */
         .ev-scroll::-webkit-scrollbar { width: 4px; }
-        .ev-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .ev-scroll::-webkit-scrollbar-thumb { background: #5b3a9e; border-radius: 4px; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center p-6 font-sans">
+<body class="bg-ambient min-h-screen flex flex-col items-center p-6">
 
     <!-- Header -->
     <header class="w-full max-w-5xl text-center my-8">
-        <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-4">
-            PatchContext
+        <div class="inline-flex items-center gap-3 mb-4">
+            <svg width="40" height="40" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <line x1="22" y1="8" x2="8" y2="30" stroke="#a99ac2" stroke-width="1.5" opacity="0.6"/>
+                <line x1="22" y1="8" x2="36" y2="30" stroke="#a99ac2" stroke-width="1.5" opacity="0.6"/>
+                <line x1="8" y1="30" x2="36" y2="30" stroke="#a99ac2" stroke-width="1.5" opacity="0.6"/>
+                <circle cx="8" cy="30" r="4" fill="#5b3a9e"/>
+                <circle cx="36" cy="30" r="4" fill="#5b3a9e"/>
+                <circle cx="22" cy="8" r="4" fill="#f5a623"/>
+                <circle cx="22" cy="8" r="4" fill="none" stroke="#f5a623" stroke-width="1" opacity="0.6">
+                    <animate attributeName="r" values="4;8;4" dur="2.5s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.6;0;0.6" dur="2.5s" repeatCount="indefinite"/>
+                </circle>
+            </svg>
+            <span class="font-mono-ui text-[11px] tracking-[0.25em] uppercase text-[#a99ac2] border border-[#3d2570] rounded-full px-3 py-1">
+                AI History Engine
+            </span>
+        </div>
+
+        <h1 class="font-display text-6xl font-bold mb-2 tracking-tight">
+            <span class="text-[#f3ede0]">Patch</span><span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-400 to-[#f5a623]">Context</span>
         </h1>
-        <p class="text-slate-400 text-lg">AI-Powered Development History Assistant for FastAPI</p>
+
+        <div class="w-24 h-[3px] mx-auto mb-4 bg-gradient-to-r from-[#5b3a9e] to-[#f5a623] rounded-full"></div>
+
+        <p class="font-mono-ui text-[#a99ac2] text-sm tracking-wide uppercase">AI-Powered Development History Assistant for FastAPI</p>
     </header>
 
     <!-- Search Box -->
     <div class="w-full max-w-5xl glass-panel rounded-2xl p-6 shadow-2xl mb-8">
         <div class="flex gap-4">
-            <input type="text" id="queryInput" placeholder="e.g., What are the primary use cases for the Dependency Injection system?" 
-                class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors">
-            <button onclick="analyzeHistory()" id="searchBtn" 
-                class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-8 rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.5)] flex items-center justify-center min-w-[140px]">
+            <input type="text" id="queryInput" placeholder="e.g., What are the primary use cases for the Dependency Injection system?"
+                class="flex-1 bg-[#1a1230] border border-[#3d2570] rounded-lg px-4 py-3 text-[#f3ede0] placeholder:text-[#7d6f9c] focus:outline-none focus:border-amber-500 transition-colors">
+            <button onclick="analyzeHistory()" id="searchBtn"
+                class="bg-[#5b3a9e] hover:bg-[#6d47b8] text-[#f3ede0] font-display font-bold py-3 px-8 rounded-lg transition-all shadow-[0_0_15px_rgba(245,166,35,0.35)] flex items-center justify-center min-w-[140px]">
                 Analyze
             </button>
         </div>
@@ -116,23 +168,23 @@
 
     <!-- Results Section -->
     <div id="resultsContainer" class="w-full max-w-5xl hidden flex-col md:flex-row gap-6">
-        
+
         <!-- Synthesized Answer -->
         <div class="flex-1 glass-panel rounded-2xl p-6 shadow-lg">
-            <h2 class="text-2xl font-bold mb-4 flex items-center gap-2">💡 Explanation</h2>
-            
+            <h2 class="font-display text-2xl font-bold mb-4 flex items-center gap-2 text-[#f3ede0]">💡 Explanation</h2>
+
             <!-- NLI Badge -->
-            <div id="nliBadge" class="mb-6 px-4 py-3 rounded-lg text-sm font-semibold"></div>
-            
-            <div id="answerText" class="text-slate-300 leading-relaxed mb-6"></div>
-            
-            <h3 class="text-lg font-bold mb-3 border-t border-slate-700 pt-4">📌 Citations</h3>
-            <ul id="citationsList" class="space-y-2 text-sm"></ul>
+            <div id="nliBadge" class="mb-6 px-4 py-3 rounded-lg text-sm font-mono-ui font-semibold"></div>
+
+            <div id="answerText" class="text-[#d6cbe6] leading-relaxed mb-6"></div>
+
+            <h3 class="font-display text-lg font-bold mb-3 border-t border-[#3d2570] pt-4 text-[#f3ede0]">📌 Citations</h3>
+            <ul id="citationsList" class="space-y-2 text-sm font-mono-ui"></ul>
         </div>
 
         <!-- Evidence Sidebar -->
         <div class="w-full md:w-1/3 glass-panel rounded-2xl p-6 shadow-lg h-fit">
-            <h2 class="text-xl font-bold mb-4">📁 Retrieved Evidence</h2>
+            <h2 class="font-display text-xl font-bold mb-4 text-[#f3ede0]">📁 Retrieved Evidence</h2>
             <div id="evidenceList" class="space-y-4"></div>
         </div>
     </div>
@@ -159,20 +211,20 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question: query })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.status === 'success') {
                     // 1. Populate Guardrail Badge
                     const badge = document.getElementById('nliBadge');
                     if (data.nli_status === 'ENTAILMENT') {
-                        badge.className = 'mb-6 px-4 py-3 rounded-lg text-sm font-semibold bg-emerald-900/50 text-emerald-400 border border-emerald-700';
+                        badge.className = 'mb-6 px-4 py-3 rounded-lg text-sm font-mono-ui font-semibold bg-[#4fae86]/15 text-[#7fd1ac] border border-[#4fae86]/40';
                         badge.innerText = '🔒 Fact Check: Verified';
                     } else if (data.nli_status === 'NEUTRAL') {
-                        badge.className = 'mb-6 px-4 py-3 rounded-lg text-sm font-semibold bg-yellow-900/50 text-yellow-400 border border-yellow-700';
+                        badge.className = 'mb-6 px-4 py-3 rounded-lg text-sm font-mono-ui font-semibold bg-[#f5a623]/15 text-[#f7c368] border border-[#f5a623]/40';
                         badge.innerText = '⚠️ Fact Check: Caution';
                     } else {
-                        badge.className = 'mb-6 px-4 py-3 rounded-lg text-sm font-semibold bg-red-900/50 text-red-400 border border-red-700';
+                        badge.className = 'mb-6 px-4 py-3 rounded-lg text-sm font-mono-ui font-semibold bg-[#e2584c]/15 text-[#ee8c82] border border-[#e2584c]/40';
                         badge.innerText = '🚨 Fact Check: Contradiction';
                     }
 
@@ -180,14 +232,14 @@
                     const cites = document.getElementById('citationsList');
                     cites.innerHTML = '';
                     data.citations.forEach((cite, idx) => {
-                        cites.innerHTML += `<li><a href="${cite.source_url}" target="_blank" class="text-blue-400 hover:underline">[${idx + 1}] ${cite.type} on GitHub</a></li>`;
+                        cites.innerHTML += `<li><a href="${cite.source_url}" target="_blank" class="text-[#f5a623] hover:underline">[${idx + 1}] ${cite.type} on GitHub</a></li>`;
                     });
 
                     // 3. Populate Answer with Clean Markdown
                     let cleanMarkdown = data.answer
                         .replace(/([^\n])\n(\||---|:---)/g, '$1\n\n$2')
                         .replace(/([^\n])\n>/g, '$1\n\n>');
-                    
+
                     document.getElementById('answerText').innerHTML = marked.parse(cleanMarkdown);
 
                     // 4. Populate Evidence Sidebar
@@ -196,12 +248,12 @@
                     data.evidence.forEach((ev, idx) => {
                         // Parse the raw markdown content of the evidence chunk
                         const parsedEvidence = marked.parse(ev.content);
-                        
+
                         evList.innerHTML += `
                             <div class="evidence-card">
-                                <div class="flex justify-between items-center mb-2 pb-2 border-b border-slate-700/50">
-                                    <span class="text-xs font-bold text-blue-400">Fragment ${idx + 1}</span>
-                                    <span class="text-[10px] font-semibold tracking-wider text-slate-500 bg-slate-800 px-2 py-1 rounded">${ev.type}</span>
+                                <div class="flex justify-between items-center mb-2 pb-2 border-b border-[#3d2570]">
+                                    <span class="text-xs font-mono-ui font-bold text-[#f5a623]">Fragment ${idx + 1}</span>
+                                    <span class="text-[10px] font-mono-ui font-semibold tracking-wider text-[#a99ac2] bg-[#1a1230] px-2 py-1 rounded">${ev.type}</span>
                                 </div>
                                 <div class="evidence-content leading-relaxed">
                                     ${parsedEvidence}
