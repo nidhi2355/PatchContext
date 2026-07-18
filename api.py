@@ -84,6 +84,7 @@ async def analyze_history(request: QueryRequest):
         }
         
     except Exception as e:
+        print(f"CRITICAL ERROR: {str(e)}") # Add this line to force it into Render logs
         raise HTTPException(status_code=500, detail=str(e))
 
 # 4. Mount the data folder so /data/raw/... paths can serve documents natively
