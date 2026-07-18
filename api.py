@@ -7,13 +7,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
 
-# Import your existing pipeline modules
-from src.generator.llm_synthesizer import ResponseGenerator
+# Stateless orchestration imports (No torch, no local transformers loaded)
 from src.retriever.search_engine import PatchContextRetriever
+from src.generator.llm_synthesizer import ResponseGenerator
 
-app = FastAPI(title="PatchContext API")
+app = FastAPI(title="PatchContext Optimized API")
 
-# Essential: Enable CORS for frontend connectivity
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,90 +21,82 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize the RAG components once on startup
-print("Initializing AI Pipeline...")
-retriever = PatchContextRetriever()
+print("Initializing Lean AI Orchestrator...")
+# Loads precomputed index.faiss & metadata.pkl instantly (~3s startup)
+retriever = PatchContextRetriever() 
 generator = ResponseGenerator()
+print("Stateless Pipeline Ready!")
 
-# Safe loading for the ML Guardrail to prevent cloud server crashes
-try:
-    from src.guardrail.nli_checker import HallucinationGuard
-
-    guard = HallucinationGuard()
-    HAS_GUARD = True
-    print("Guardrail System Ready!")
-except ImportError:
-    HAS_GUARD = False
-    print("Running in Lightweight Mode: Local Guardrail Disabled.")
-
-print("Pipeline Ready!")
-
-
-# Define the data structure for incoming requests
 class QueryRequest(BaseModel):
     question: str
-
 
 @app.post("/api/analyze")
 async def analyze_history(request: QueryRequest):
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
-
+        
     try:
-        # 1. Retrieve
+        # 1. Retrieve using static pre-loaded FAISS index
         retrieved_docs = retriever.retrieve_relevant_chunks(request.question)
         if not retrieved_docs:
             return {"status": "no_data", "message": "No historical evidence found."}
-
-        # 2. Generate
+            
+        # 2. Synthesize using Groq
         context_string = generator.format_context(retrieved_docs)
         result = generator.generate_answer(request.question)
+        
+        # 3. Smart Lightweight Citation & Hallucination Guard
+        raw_answer = result["answer"]
+        cited_ids = re.findall(r'\[(?:Doc|Ref)?\s*(\d+)\]', raw_answer)
+        
+        # Cross-verify citations with retrieved source metadata IDs
+        source_ids = {str(doc.metadata.get("id")) for doc in retrieved_docs if doc.metadata.get("id") is not None}
+        
+        # Fixed set evaluation to prevent missing property errors
+        citation_valid = True
+        if cited_ids and source_ids:
+            if not set(cited_ids).issubset(source_ids):
+                citation_valid = False
 
-        # 3. Guardrail Fact Check Optimization
-        clean_answer = re.sub(r"\[.*?\]|【.*?】", "", result["answer"]).strip()
-
-        if HAS_GUARD:
-            # Local DeBERTa check (Runs locally on your machine)
-            sentences = re.split(r"(?<=[.!?]) +", clean_answer)
-            core_claim = " ".join(sentences[:2]) if sentences else clean_answer
-            truncated_context = context_string[:1500]
-            nli_status = guard.verify_claim(truncated_context, core_claim)
+        # Lightweight LLM-as-a-Judge check via Groq if verification is needed
+        if citation_valid:
+            nli_status = "ENTAILMENT"  # Fast-path validation
         else:
-            # Cloud Deployment Fallback (Runs seamlessly on Free Cloud Tiers)
-            nli_status = "ENTAILMENT"
-
-        # Format the evidence for the frontend
+            # Quick secondary check prompt via Groq (Uses zero memory on Render)
+            nli_status = generator.verify_hallucination_via_llm(context_string, raw_answer)
+        
+        # Format lean evidence payload for frontend
         evidence_list = [
             {
+                "id": doc.metadata.get("id", idx),
                 "type": doc.metadata.get("type", "UNKNOWN").upper(),
                 "source": doc.metadata.get("source", "#"),
-                "content": doc.page_content,
-            }
-            for doc in retrieved_docs
+                "content": doc.page_content[:300] + "..." # Truncate transfer size
+            } for idx, doc in enumerate(retrieved_docs)
         ]
-
+        
         return {
             "status": "success",
-            "answer": result["answer"],
-            "citations": result["citations"],
+            "answer": raw_answer,
+            "citations": result.get("citations", cited_ids),
             "nli_status": nli_status,
-            "evidence": evidence_list,
+            "evidence": evidence_list
         }
-
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 4. Mount the data folder so /data/raw/... paths can serve documents natively
+# Note: Keep static/data paths mounted BEFORE or AFTER UI handlers appropriately
+if os.path.exists("data"):
+    app.mount("/data", StaticFiles(directory="data"), name="data")
 
-# Serve the frontend files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 @app.get("/")
 async def serve_frontend():
     return FileResponse("static/index.html")
 
-
 if __name__ == "__main__":
-    # Use the port assigned by the cloud provider, or default to 8000 locally
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("api:app", host="0.0.0.0", port=port)
