@@ -1,67 +1,32 @@
 import os
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from sentence_transformers import CrossEncoder
 
 class PatchContextRetriever:
-    def __init__(self, index_path: str = "data/faiss_index"):
-        self.index_path = index_path
+    def __init__(self):
+        # 1. Keep the lightweight embedder to process the user's question
+        self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         
-        # Initialize the same embedding model used during indexing
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-small-en-v1.5",
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': True}
-        )
-        
-        # Load the local FAISS database
-        print("Loading local FAISS vector index...")
-        # allow_dangerous_deserialization is required to load local pickle files safely
+        # 2. Load the offline FAISS index we just built
         self.vectorstore = FAISS.load_local(
-            self.index_path, 
+            "faiss_index", 
             self.embeddings, 
-            allow_dangerous_deserialization=True
+            allow_dangerous_deserialization=True 
         )
         
-        # Load the Cross-Encoder model for high-precision reranking
-        print("Loading Cross-Encoder reranker (cross-encoder/ms-marco-MiniLM-L-6-v2)...")
-        self.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
+        # 3. Standard retriever (you can use similarity or MMR)
+        self.retriever = self.vectorstore.as_retriever(
+            search_type="mmr", # MMR helps diversify results automatically
+            search_kwargs={"k": 4}
+        )
 
-    def retrieve_relevant_chunks(self, query: str, top_k_mmr: int = 10, top_k_rerank: int = 4):
-        """Retrieves diverse chunks using MMR and filters them with a Cross-Encoder."""
+    def retrieve_relevant_chunks(self, query):
+        print(f"Executing lightweight search for query: '{query}'")
         
-        # 1. Configure the vectorstore as an MMR retriever
-        # fetch_k defines how many total items to pull initially before filtering down to top_k_mmr diverse ones
-        retriever = self.vectorstore.as_retriever(
-            search_type="mmr",
-            search_kwargs={"k": top_k_mmr, "fetch_k": 20}
-        )
+        # ONLY use the FAISS retrieval. No Cross-Encoder reranking!
+        docs = self.retriever.invoke(query)
         
-        print(f"Executing MMR search for query: '{query}'")
-        initial_docs = retriever.invoke(query)
-        
-        if not initial_docs:
-            print("No matching documents found in vector store.")
-            return []
-            
-        # 2. Prepare inputs for Cross-Encoder Reranking
-        # The cross-encoder takes a list of pairs: [[query, document_1], [query, document_2], ...]
-        pairs = [[query, doc.page_content] for doc in initial_docs]
-        
-        print("Reranking chunks via Cross-Encoder...")
-        scores = self.reranker.predict(pairs)
-        
-        # Pair up the documents with their corresponding cross-encoder score
-        scored_docs = list(zip(initial_docs, scores))
-        
-        # Sort documents by score in descending order (highest relevance first)
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
-        
-        # Extract the final top-k reranked documents
-        final_docs = [doc for doc, score in scored_docs[:top_k_rerank]]
-        print(f"Successfully retrieved and reranked top {len(final_docs)} context chunks.")
-        
-        return final_docs
+        return docs
 
 if __name__ == "__main__":
     # Test our search pipeline with a standard repo exploration question
