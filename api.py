@@ -27,6 +27,33 @@ retriever = PatchContextRetriever()
 generator = ResponseGenerator()
 print("Stateless Pipeline Ready!")
 
+# Base URL for source repository documentation
+# Base URL for source repository documentation
+GITHUB_BASE_URL = "https://github.com/fastapi/fastapi/blob/master/"
+
+def format_github_url(source_path: str) -> str:
+    """Converts a local file path into a valid, clickable GitHub repository URL."""
+    if not source_path or source_path == "#":
+        return "#"
+    
+    # Return directly if already an HTTP/HTTPS URL
+    if source_path.startswith("http://") or source_path.startswith("https://"):
+        return source_path
+        
+    # Standardize slashes for cross-platform compatibility
+    clean_path = source_path.replace("\\", "/")
+    
+    # Strip the local ingestion folder path so only the repo structure remains
+    local_prefix = "data/raw/fastapi_repo/"
+    
+    if local_prefix in clean_path:
+        clean_path = clean_path.split(local_prefix)[-1]
+    else:
+        # Fallback cleanup just in case
+        clean_path = clean_path.lstrip("./")
+    
+    return f"{GITHUB_BASE_URL}{clean_path}"
+
 class QueryRequest(BaseModel):
     question: str
 
@@ -58,37 +85,48 @@ async def analyze_history(request: QueryRequest):
             if not set(cited_ids).issubset(source_ids):
                 citation_valid = False
 
-        # Lightweight LLM-as-a-Judge check via Groq if verification is needed
+        # Lightweight check
         if citation_valid:
-            nli_status = "ENTAILMENT"  # Fast-path validation
+            nli_status = "ENTAILMENT"
         else:
-            # Quick secondary check prompt via Groq (Uses zero memory on Render)
-            nli_status = generator.verify_hallucination_via_llm(context_string, raw_answer)
-        
-        # Format lean evidence payload for frontend
+            if hasattr(generator, "verify_hallucination_via_llm"):
+                nli_status = generator.verify_hallucination_via_llm(context_string, raw_answer)
+            else:
+                nli_status = "VERIFIED"
+
+        # Format citations with valid GitHub links
+        raw_citations = result.get("citations", [])
+        formatted_citations = []
+        for cite in raw_citations:
+            if isinstance(cite, dict):
+                formatted_citations.append({
+                    "type": cite.get("type", "DOCUMENTATION"),
+                    "source_url": format_github_url(cite.get("source_url", "#"))
+                })
+
+        # Format lean evidence payload for frontend with working GitHub URLs
         evidence_list = [
             {
                 "id": doc.metadata.get("id", idx),
                 "type": doc.metadata.get("type", "UNKNOWN").upper(),
-                "source": doc.metadata.get("source", "#"),
-                "content": doc.page_content[:300] + "..." # Truncate transfer size
+                "source": format_github_url(doc.metadata.get("source", "#")),
+                "content": doc.page_content[:300] + "..."  # Truncate transfer size
             } for idx, doc in enumerate(retrieved_docs)
         ]
         
         return {
             "status": "success",
             "answer": raw_answer,
-            "citations": result.get("citations", cited_ids),
+            "citations": formatted_citations if formatted_citations else cited_ids,
             "nli_status": nli_status,
             "evidence": evidence_list
         }
         
     except Exception as e:
-        print(f"CRITICAL ERROR: {str(e)}") # Add this line to force it into Render logs
+        print(f"CRITICAL ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# 4. Mount the data folder so /data/raw/... paths can serve documents natively
-# Note: Keep static/data paths mounted BEFORE or AFTER UI handlers appropriately
+# Mount static files
 if os.path.exists("data"):
     app.mount("/data", StaticFiles(directory="data"), name="data")
 

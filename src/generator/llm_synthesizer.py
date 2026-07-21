@@ -4,7 +4,7 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from src.retriever.search_engine import PatchContextRetriever
 
-# Load the GEMINI_API_KEY from .env
+# Load environment variables
 load_dotenv()
 
 class ResponseGenerator:
@@ -18,10 +18,10 @@ class ResponseGenerator:
             max_retries=2
         )
         
-        # Initialize our retrieval engine from Step 5
+        # Initialize retrieval engine
         self.retriever = PatchContextRetriever()
         
-        # Define the strict system prompt for context-aware generation
+        # Define strict system prompt enforcing clear formatting and no tables
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """You are PatchContext, an expert AI developer assistant. 
 Your job is to explain the historical reasoning behind software development decisions.
@@ -29,13 +29,19 @@ You must answer the user's question based SOLELY on the retrieved repository evi
 If the evidence does not contain the answer, politely state that the repository history does not contain this information.
 Do NOT make unsupported assumptions. Clearly explain the development rationale.
 
+FORMATTING & RESPONSE RULES:
+1. STRICTLY NO TABLES: Never generate markdown tables, pipe characters (`|`), ASCII boxes, or tabular layouts under any circumstances.
+2. USE BULLET POINTS: Present all structured lists, options, features, or key takeaways using standard Markdown bullet points (`-` or `*`).
+3. STRUCTURE: Organize explanations using standard Markdown headings (`###`), bold text (`**term**`), and code blocks where applicable.
+4. LANGUAGE: Always respond strictly in English.
+
 Retrieved Repository Evidence:
 {context}
 """),
             ("human", "{question}")
         ])
         
-        # Chain the prompt and the LLM together
+        # Chain prompt and LLM
         self.chain = self.prompt | self.llm
 
     def format_context(self, docs):
@@ -51,7 +57,7 @@ Retrieved Repository Evidence:
     def generate_answer(self, query: str):
         """Retrieves context, generates an answer, and attaches citations."""
         
-        # 1. Retrieve the best historical evidence
+        # 1. Retrieve historical evidence
         print(f"\nSearching repository history for: '{query}'")
         retrieved_docs = self.retriever.retrieve_relevant_chunks(query)
         
@@ -61,17 +67,17 @@ Retrieved Repository Evidence:
                 "citations": []
             }
             
-        # 2. Format the retrieved context
+        # 2. Format retrieved context
         context_string = self.format_context(retrieved_docs)
         
-        # 3. Generate the response using Gemini Flash
-        print("Generating synthesized explanation via Gemini Flash...")
+        # 3. Generate synthesized explanation
+        print("Generating synthesized explanation via Groq...")
         response = self.chain.invoke({
             "context": context_string,
             "question": query
         })
         
-        # 4. Extract citations for the frontend UI
+        # 4. Extract citations for UI
         citations = [
             {
                 "type": doc.metadata.get("type", "unknown").upper(),
@@ -94,7 +100,6 @@ Retrieved Repository Evidence:
         }
 
 if __name__ == "__main__":
-    # Test the complete RAG generation pipeline
     generator = ResponseGenerator()
     test_query = "Why did the project introduce the JSONResponse class?"
     
